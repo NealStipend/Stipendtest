@@ -44,33 +44,13 @@ void CActiveMasternode::ManageStatus()
         }
 
         LogPrintf("CActiveMasternode::ManageStatus() - Checking inbound connection to '%s'\n", service.ToString().c_str());
-
-        if(Params().NetworkID() == CChainParams::MAIN){
-            if(service.GetPort() != 46978) {
-                notCapableReason = "Invalid port: " + boost::lexical_cast<string>(service.GetPort()) + " - only 46978 is supported on mainnet.";
-                status = MASTERNODE_NOT_CAPABLE;
-                LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason.c_str());
-                return;
-            }
-        } else if(service.GetPort() == 46978) {
-            notCapableReason = "Invalid port: " + boost::lexical_cast<string>(service.GetPort()) + " - 46978 is only supported on mainnet.";
-            status = MASTERNODE_NOT_CAPABLE;
-            LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason.c_str());
-            return;
-        }
-        if(Params().NetworkID() == CChainParams::MAIN){
-            if(!(service.IsIPv4() && service.IsRoutable())) {
-                notCapableReason = "Invalid IP address (IPV4 ONLY)" + service.ToString();
-                status = MASTERNODE_NOT_CAPABLE;
-                LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason.c_str());
-                return;
-            }
-            if(!ConnectNode((CAddress)service, service.ToString().c_str())){
+            
+	    
+	    if(!ConnectNode((CAddress)service, service.ToString().c_str())){
                 notCapableReason = "Could not connect to " + service.ToString();
                 status = MASTERNODE_NOT_CAPABLE;
                 LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason.c_str());
                 return;
-            }
         }
 
         if(pwalletMain->IsLocked()){
@@ -114,21 +94,7 @@ void CActiveMasternode::ManageStatus()
             	LogPrintf("ActiveMasternode::Dseep() - Error upon calling SetKey: %s\n", errorMessage.c_str());
             	return;
             }
-
-            /* donations are not supported in stipend.conf */
-            CScript donationAddress = CScript();
-            int donationPercentage = 0;
-
-            if(!Register(vin, service, keyCollateralAddress, pubKeyCollateralAddress, keyMasternode, pubKeyMasternode, donationAddress, donationPercentage, errorMessage)) {
-                LogPrintf("CActiveMasternode::ManageStatus() - Error on Register: %s\n", errorMessage.c_str());
-            }
-
-            return;
-        } else {
-            notCapableReason = "Could not find suitable coins!";
-        	LogPrintf("CActiveMasternode::ManageStatus() - Could not find suitable coins!\n");
-        }
-    }
+	}
 
     //send to all peers
     if(!Dseep(errorMessage)) {
@@ -146,7 +112,11 @@ bool CActiveMasternode::StopMasterNode(std::string strService, std::string strKe
     	LogPrintf("CActiveMasternode::StopMasterNode() - Error: %s\n", errorMessage.c_str());
 		return false;
 	}
-
+	
+    if (GetMasterNodeVin(vin, pubKeyMasternode, keyMasternode)){
+        LogPrintf("MasternodeStop::VinFound: %s\n", vin.ToString());
+   }    
+	    
 	return StopMasterNode(vin, CService(strService, true), keyMasternode, pubKeyMasternode, errorMessage);
 }
 
@@ -239,6 +209,7 @@ bool CActiveMasternode::Dseep(CTxIn vin, CService service, CKey keyMasternode, C
     mnodeman.RelayMasternodeEntryPing(vin, vchMasterNodeSignature, masterNodeSignatureTime, stop);
 
     return true;
+	
 }
 
 bool CActiveMasternode::Register(std::string strService, std::string strKeyMasternode, std::string txHash, std::string strOutputIndex, std::string strDonationAddress, std::string strDonationPercentage, std::string& errorMessage) {
@@ -316,7 +287,8 @@ bool CActiveMasternode::Register(CTxIn vin, CService service, CKey keyCollateral
     {
         LogPrintf("CActiveMasternode::Register() - Adding to masternode list service: %s - vin: %s\n", service.ToString().c_str(), vin.ToString().c_str());
         CMasternode mn(service, vin, pubKeyCollateralAddress, vchMasterNodeSignature, masterNodeSignatureTime, pubKeyMasternode, PROTOCOL_VERSION, donationAddress, donationPercentage);
-        mn.UpdateLastSeen(masterNodeSignatureTime);
+        mn.ChangeNodeStatus(false);
+	mn.UpdateLastSeen(masterNodeSignatureTime);
         mnodeman.Add(mn);
     }
 
